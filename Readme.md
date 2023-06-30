@@ -10,11 +10,11 @@ docker build -t mandelbrot-benchmark-rust .
 2. Run the benchmark script
 - to run in a single core mode
 ```bash
-time ./run_benchmark.sh <image size>
+bash ./run_benchmark.sh <image size>
 ```
 - to run in a multi core mode
 ```bash
-time ./run_benchmark.sh <image size> parallel
+bash ./run_benchmark.sh <image size> parallel
 ```
 
 ## Benchmark results
