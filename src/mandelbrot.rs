@@ -88,39 +88,37 @@ impl MandelbrotSet{
         let c_center = (self.table_size as f64/ 2.0).floor();
         let r_scale = r_center / 2.0;
         let c_scale = c_center / 2.0;
+        let table_size = self.table_size;
 
         let (tx, rx) = mpsc::channel();
 
-        for row in 0..self.table_size{
-            if verbose {
-                if row % 100 == 0{
-                    println!("completing {:.3}%", ((row+1) as f64)/(self.table_size as f64) * 100.0);
-                }
-            }
-
-            for col in 0..self.table_size {
-                let local_tx = tx.clone();
-                thread::spawn(move || {
+        for row in 0..table_size{
+            let local_tx = tx.clone();
+            let mut row_vec = vec![0; table_size];
+            thread::spawn(move || {
+                for col in 0..table_size {
                     let c = ComplexNumber::new(((row as f64) - r_center) / r_scale, ((col as f64) - c_center) / c_scale);
                     let is_set_member = MandelbrotSet::check_mandelbrot_membership(&c);
                     if is_set_member {
-                        // println!("Thread {} done", col_local);
-                        local_tx.send((col, 255)).unwrap();
+                        row_vec[col] = 255;
                     } else {
-                        // println!("Thread {} done", col_local);
-                        local_tx.send((col, 0)).unwrap();
+                        row_vec[col] = 0;
                     };
-                });
-            }
-
-            let mut received_cell_count = 0;
-            for received in &rx{
-                received_cell_count += 1;
-                self.grid_table[row][received.0] = received.1;
-
-                if received_cell_count >= self.table_size{
-                    break;
                 }
+                local_tx.send((row, row_vec)).unwrap();
+            });
+        }
+        let mut received_row_count = 0;
+        for received in &rx{
+            received_row_count += 1;
+            self.grid_table[received.0] = received.1;
+            if verbose {
+                if received_row_count % 100 == 0{
+                    println!("completing {:.3}%", ((received_row_count+1) as f64)/(self.table_size as f64) * 100.0);
+                }
+            }
+            if received_row_count >= self.table_size{
+                break;
             }
         }
     }
