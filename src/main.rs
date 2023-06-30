@@ -19,10 +19,23 @@ fn main() {
         "output_img.pgm".to_string()
     };
 
+    let is_parallel = if args.len() > 3 {
+        args[3].parse::<bool>().unwrap()
+    }else{
+        false
+    };
+
+    let is_verbose = if args.len() > 4 {
+        args[4].parse::<bool>().unwrap()
+    }else{
+        true
+    };
+
+
     println!("Table size: {}", table_size);
 
     let mut set = mandelbrot::MandelbrotSet::new(table_size);
-    set.construct_set(true);
+    set.construct_set(is_parallel, is_verbose);
 
     pgm::write_image_file(&set, &output_path).expect("Failed to write output file");
     println!("Wrote output file at {}", &output_path);

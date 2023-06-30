@@ -1,6 +1,10 @@
 
 const MAX_ITER: i32 = 1000;
 
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::thread;
+
 pub struct MandelbrotSet{
     pub grid_table: Vec<Vec<i32>>,
     pub table_size: usize,
@@ -46,20 +50,30 @@ impl MandelbrotSet{
         MandelbrotSet{grid_table, table_size}
     }
 
-    pub fn construct_set(&mut self, verbose: bool){
+    pub fn construct_set(&mut self, parallel: bool, verbose: bool){
+        if parallel {
+            self.construct_set_parallel(verbose);
+        }else{
+            self.construct_set_sequential(verbose);
+        }
+    }
+
+    fn construct_set_sequential(&mut self, verbose: bool){
         let r_center = (self.table_size as f64/ 2.0).floor();
         let c_center = (self.table_size as f64/ 2.0).floor();
         let r_scale = r_center / 2.0;
         let c_scale = c_center / 2.0;
+
         for row in 0..self.table_size{
             if verbose {
                 if row % 100 == 0{
-                    println!("completing {:.3}%", (row as f64)/(self.table_size as f64) * 100.0);
+                    println!("completing {:.3}%", ((row+1) as f64)/(self.table_size as f64) * 100.0);
                 }
             }
+
             for col in 0..self.table_size{
                 let c = ComplexNumber::new(((row as f64) - r_center) / r_scale, ((col as f64) - c_center) / c_scale);
-                let is_set_member = self.check_mandelbrot_membership(&c);
+                let is_set_member = MandelbrotSet::check_mandelbrot_membership(&c);
                 if is_set_member{
                     self.grid_table[row][col] = 255;
                 }else{
@@ -69,7 +83,49 @@ impl MandelbrotSet{
         }
     }
 
-    pub fn check_mandelbrot_membership(&self, c: &ComplexNumber) -> bool{
+    fn construct_set_parallel(&mut self, verbose: bool){
+        let r_center = (self.table_size as f64/ 2.0).floor();
+        let c_center = (self.table_size as f64/ 2.0).floor();
+        let r_scale = r_center / 2.0;
+        let c_scale = c_center / 2.0;
+
+        let (tx, rx) = mpsc::channel();
+
+        for row in 0..self.table_size{
+            if verbose {
+                if row % 100 == 0{
+                    println!("completing {:.3}%", ((row+1) as f64)/(self.table_size as f64) * 100.0);
+                }
+            }
+
+            for col in 0..self.table_size {
+                let local_tx = tx.clone();
+                thread::spawn(move || {
+                    let c = ComplexNumber::new(((row as f64) - r_center) / r_scale, ((col as f64) - c_center) / c_scale);
+                    let is_set_member = MandelbrotSet::check_mandelbrot_membership(&c);
+                    if is_set_member {
+                        // println!("Thread {} done", col_local);
+                        local_tx.send((col, 255)).unwrap();
+                    } else {
+                        // println!("Thread {} done", col_local);
+                        local_tx.send((col, 0)).unwrap();
+                    };
+                });
+            }
+
+            let mut received_cell_count = 0;
+            for received in &rx{
+                received_cell_count += 1;
+                self.grid_table[row][received.0] = received.1;
+
+                if received_cell_count >= self.table_size{
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn check_mandelbrot_membership(c: &ComplexNumber) -> bool{
         let mut z = ComplexNumber::new(0.0, 0.0);
         for _ in 0..MAX_ITER{
             let z_squared = z.square();
